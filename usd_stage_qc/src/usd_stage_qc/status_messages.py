@@ -1,8 +1,12 @@
 import hou
-def handle_error(message: str):
+
+
+def handle_error(message: str) -> None:
     """
-    Displays an error message if called from inside houdini UI or
-    raises the ValueError if called from pipeline scripts
+    Display an error message in Houdini.
+
+    Args:
+        message: Error message.
     """
     if hou.isUIAvailable():
         hou.ui.displayMessage(

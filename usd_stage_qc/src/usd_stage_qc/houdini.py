@@ -1,28 +1,30 @@
 import hou
 from pxr import Usd
-import os
-from usd_stage_qc import _status_messages
+
+from usd_stage_qc import status_messages
 
 
 def get_single_selected_node():
-    """
-    Returns a single selected Houdini node.
-    """
+    """Return a single selected Houdini node."""
     selected = hou.selectedNodes()
 
     if not selected:
-        _status_messages.handle_error('No nodes were selected. Please select one node.')
+        status_messages.handle_error('No nodes were selected. Please select one node.')
 
     if len(selected) > 1:
-        _status_messages.handle_error('More than one node was selected. Please select only one node.')
+        status_messages.handle_error('More than one node was selected. Please select only one node.')
 
     return selected[0]
 
 
-def create_and_insert_hou_node(parent_node: hou.Node, type: str, name: str):
+def create_and_insert_hou_node(parent_node: hou.Node, type: str, name: str) -> hou.Node:
     """
-    Creates and inserts a node as an output of the parent_node into a current nodes stream,
-    Returns: created and inserted node
+    Create and insert a node into the parent node stream.
+
+    Args:
+        parent_node: Parent node.
+        type: Node type.
+        name: Node name.
     """
     parent_pos = parent_node.position()
     context = parent_node.parent()
@@ -43,10 +45,12 @@ def create_and_insert_hou_node(parent_node: hou.Node, type: str, name: str):
     return inserted_node
 
 
-def offset_outputs_position(root):
+def offset_outputs_position(root: hou.Node) -> None:
     """
-    Runs over all the nodes connected to the selected root node and
-    offset their position in Y accordingly.
+    Offset positions of downstream nodes in Y.
+
+    Args:
+        root: Selected root node.
     """
     queue = [root]
     while len(queue) > 0:
@@ -59,11 +63,12 @@ def offset_outputs_position(root):
             queue.append(node)
 
 
-def compute_mat_assign_index(material_assign_node: hou.Node):
+def compute_mat_assign_index(material_assign_node: hou.Node) -> int:
     """
-    Computes the next material assignment index.
-    If there is only one material and its path is empty, returns the current index.
-    Otherwise, increments the current material count by 1 and returns it.
+    Return the next material assignment index.
+
+    Args:
+        material_assign_node: Material assign houdini LOP node.
     """
     mat_num = material_assign_node.parm("nummaterials").eval()
 
@@ -75,9 +80,15 @@ def compute_mat_assign_index(material_assign_node: hou.Node):
 
 
 def populate_mat_assign_parms(material_assign_node: hou.Node, mat_index: int, usd_prim: Usd.Prim,
-                              material_prim: Usd.Prim):
+                              material_prim: Usd.Prim) -> None:
     """
-    Populates the material assignment parameters for a new material entry.
+    Populate material assignment parameters.
+
+    Args:
+        material_assign_node: Material assign node.
+        mat_index: Index in material assign node.
+        usd_prim: USD prim.
+        material_prim: Material prim.
     """
     material_assign_node.parm("nummaterials").set(mat_index)
     material_assign_node.parm(f"primpattern{mat_index}").set(str(usd_prim.GetPath()))
