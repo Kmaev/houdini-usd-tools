@@ -1,12 +1,18 @@
-from pxr import Usd, UsdGeom, UsdShade
-from typing import Tuple
-import hou
 import os
+
+import hou
+from pxr import Usd, UsdGeom, UsdShade
 
 
 def is_usd_file(path: str) -> bool:
     """
-    Checks if a given path points to an existing USD file.
+    Check if a path points to an existing USD file.
+
+    Args:
+        path: Usd file path.
+
+    Returns:
+        bool: True if valid USD file.
     """
     if not isinstance(path, str):
         raise TypeError("Expected path to be a string")
@@ -20,11 +26,16 @@ def is_usd_file(path: str) -> bool:
     return path.lower().endswith(usd_extensions) and os.path.isfile(path)
 
 
-def collect_prims_without_material(stage: Usd.Stage) -> list[str]:
+def collect_prims_without_material(stage: Usd.Stage) -> list[Usd.Prim]:
     """
-    Traverses usd stage and collect all primitives without bound material.
-    """
+    Collect primitives without valid material bindings.
 
+    Args:
+        stage: USD stage.
+
+    Returns:
+        list: Primitives without material.
+    """
     start_prim = stage.GetPseudoRoot()
     iterator = iter(Usd.PrimRange(start_prim))
     no_material = []
@@ -38,9 +49,15 @@ def collect_prims_without_material(stage: Usd.Stage) -> list[str]:
     return no_material
 
 
-def check_prim_material_binding(prim: Usd.Prim) -> Tuple[Usd.Prim, UsdShade.Tokens]:
+def check_prim_material_binding(prim: Usd.Prim) -> tuple[Usd.Prim, UsdShade.Tokens]:
     """
-    Checks if a primitive has material binding
+    Return bound material and binding strength.
+
+    Args:
+        prim: USD prim.
+
+    Returns:
+        tuple: Material and strength.
     """
     mat_bind_api = UsdShade.MaterialBindingAPI(prim)
     bound_material, strength = mat_bind_api.ComputeBoundMaterial()
@@ -49,14 +66,26 @@ def check_prim_material_binding(prim: Usd.Prim) -> Tuple[Usd.Prim, UsdShade.Toke
 
 def is_material_active(mat: Usd.Prim) -> bool:
     """
-    Checks if material is material.
+    Check if a material is active.
+
+    Args:
+        mat: Material prim.
+
+    Returns:
+        bool: True if active.
     """
     return mat.GetPrim().IsActive()
 
 
 def solve_material_status(mat: Usd.Prim) -> str:
     """
-    Returns material status string.
+    Return material status.
+
+    Args:
+        mat: Material prim.
+
+    Returns:
+        str | None: Status string.
     """
     if mat is None:
         return None
@@ -65,9 +94,15 @@ def solve_material_status(mat: Usd.Prim) -> str:
     return "Active"
 
 
-def check_live_houdini_stage(stage):
+def check_live_houdini_stage(stage) -> list[Usd.Prim]:
     """
-    Gets a list of primitives without properly bound material in a live houdini session
+    Collect primitives without material from a live stage.
+
+    Args:
+        stage: USD stage.
+
+    Returns:
+        list: Primitives without material.
     """
     mat_binds = collect_prims_without_material(stage)
 
@@ -76,7 +111,13 @@ def check_live_houdini_stage(stage):
 
 def check_usd_file(stage_path: str) -> bool:
     """
-    Gets a list of primitives without properly bound material
+    Collect primitives without material from a USD file.
+
+    Args:
+        stage_path: USD file path.
+
+    Returns:
+        list | None: Primitives without material.
     """
     if is_usd_file(stage_path):
         stage = Usd.Stage.Open(stage_path)
@@ -89,7 +130,13 @@ def check_usd_file(stage_path: str) -> bool:
 
 def find_all_materials(stage: Usd.Stage) -> list[Usd.Prim]:
     """
-    Collects all materials from the stage and returns the list of Usd.Prim
+    Collect all material prims from the stage.
+
+    Args:
+        stage: USD stage.
+
+    Returns:
+        list: Material prims.
     """
     start_prim = stage.GetPseudoRoot()
     iterator = iter(Usd.PrimRange(start_prim))

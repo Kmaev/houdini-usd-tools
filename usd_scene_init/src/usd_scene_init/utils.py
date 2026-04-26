@@ -1,10 +1,16 @@
 import json
 from typing import Any
+
 from pxr import Usd, UsdGeom
 
 
-# USD Scene Initialization From Template
-def configure_xform(prim: Usd.Prim, kind: str | None = None):
+def configure_xform(prim: Usd.Prim, kind: str | None = None) -> UsdGeom.Xform:
+    """
+    Configure an Xform prim, if kind set kind and asset name.
+
+    Returns:
+        UsdGeom.Xform
+    """
     xform = UsdGeom.Xform(prim)
     if kind:
         model_api = Usd.ModelAPI(xform)
@@ -14,7 +20,8 @@ def configure_xform(prim: Usd.Prim, kind: str | None = None):
     return xform
 
 
-def create_prim(stage: Usd.Stage, parent_path: str, prim: dict[str, Any]):
+def create_prim(stage: Usd.Stage, parent_path: str, prim: dict[str, Any]) -> None:
+    """Create a prim and its children on the stage from dictionary template"""
     path = f"{parent_path}/{prim['name']}"
     prim_type = prim["type"]
     prim_kind = prim.get("kind")
@@ -28,7 +35,8 @@ def create_prim(stage: Usd.Stage, parent_path: str, prim: dict[str, Any]):
         create_prim(stage, path, child)
 
 
-def create_scene_from_json(template_path: str, stage_output_path: str):
+def create_scene_from_json(template_path: str, stage_output_path: str) -> None:
+    """Create a USD stage from a JSON template and save it."""
     with open(template_path, "r") as f:
         root_prim = json.load(f)
 

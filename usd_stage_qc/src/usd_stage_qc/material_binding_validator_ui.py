@@ -1,18 +1,28 @@
 import os
-import hou
 from importlib import reload
-from PySide2 import QtWidgets, QtCore, QtGui
-from pxr import Usd
-from usd_stage_qc import _usd, _houdini, trie_search, _status_messages
 
-for module in (_usd, _houdini, _status_messages, trie_search):
+import hou
+from PySide6 import QtWidgets, QtCore, QtGui
+from pxr import Usd
+
+from usd_stage_qc import usd, houdini, trie_search, status_messages
+
+for module in (usd, houdini, status_messages, trie_search):
     reload(module)
 
 
 class MaterialBindingChecker(QtWidgets.QDialog):
+    """UI widget to check missing materials and assign them on a Houdini USD stage."""
+
     def __init__(self, parent=None):
+        """
+        Initialize the material binding checker UI.
+
+        Args:
+            parent: Parent widget.
+        """
         super(MaterialBindingChecker, self).__init__(parent=parent)
-        self.stage_path = _houdini.get_single_selected_node().path()
+        self.stage_path = houdini.get_single_selected_node().path()
         self.stage = hou.node(self.stage_path).stage()
         self.assign_mat_node = None
         self.mat_binds = []
@@ -172,12 +182,10 @@ class MaterialBindingChecker(QtWidgets.QDialog):
         self.search_line.textChanged.connect(self.reset_search_state)
         self.expand_all_check.toggled.connect(self.on_expand_all_check)
 
-    def populate_prim_list(self):
-        """
-        Populates the search_output QListWidget with a list of primitives that are missing material bindings.
-        """
+    def populate_prim_list(self) -> None:
+        """Populate the prim list with primitives missing material bindings."""
         self.search_output.clear()
-        self.mat_binds = _usd.check_live_houdini_stage(self.stage)
+        self.mat_binds = usd.check_live_houdini_stage(self.stage)
 
         for i in self.mat_binds:
             item = QtWidgets.QListWidgetItem(i.GetName())
@@ -187,17 +195,19 @@ class MaterialBindingChecker(QtWidgets.QDialog):
             item.setData(QtCore.Qt.UserRole, metadata)
             self.search_output.addItem(item)
 
-    def get_selection(self, widget: object) -> object:
+    def get_selection(self, widget: QtWidgets.QAbstractItemView) \
+            -> list[QtWidgets.QTreeWidgetItem | QtWidgets.QListWidgetItem] | None:
         """
-        Returns currently selected item from a widget.
+        Return selected items from a list widget.
+
+        Args:
+            widget: List widget.
         """
         selected = widget.selectedItems()
         return selected if selected else None
 
-    def on_list_item_changed(self):
-        """
-        On selection changed gets a newly selected item, queries its metadata and updates the detail view.
-        """
+    def on_list_item_changed(self) -> None:
+        """Update detail view from selected item."""
         selected_items = self.get_selection(self.search_output)
 
         if selected_items is not None:
@@ -206,9 +216,12 @@ class MaterialBindingChecker(QtWidgets.QDialog):
             usd_prim = metadata.get('usd_prim')
             self.populate_details_view(usd_prim)
 
-    def populate_details_view(self, usd_prim: Usd.Prim):
+    def populate_details_view(self, usd_prim: Usd.Prim) -> None:
         """
-        Populates detail view from the selected USD primitive
+        Populate detail view from a USD prim.
+
+        Args:
+            usd_prim: USD prim.
         """
         if usd_prim:
             self.prim_name_label.setText(str(usd_prim.GetName()))
@@ -216,50 +229,45 @@ class MaterialBindingChecker(QtWidgets.QDialog):
             self.prim_path_text.setReadOnly(True)
             self.prim_path_text.setText(path)
             self.prim_type_label.setText(str(usd_prim.GetTypeName()))
-            mat = _usd.check_prim_material_binding(usd_prim)[0]
+            mat = usd.check_prim_material_binding(usd_prim)[0]
             self.mat_status_label.setText(
-                str(_usd.solve_material_status(mat))) if mat else self.mat_status_label.setText("None")
+                str(usd.solve_material_status(mat))) if mat else self.mat_status_label.setText("None")
             self.prim_bound_path.setText(str(mat.GetPath())) if mat else self.prim_bound_path.setText('None')
 
-    def on_refresh_executed(self):
-        """
-        Clears the details frame and populates the search_output list
-        with an updated list of usd primitives missing material bindings.
-        """
+    def on_refresh_executed(self) -> None:
+        """Refresh prim list and clear details."""
         self.clear_details_view()
         self.populate_prim_list()
         self.search_line.clear()
 
-    def clear_details_view(self):
+    def clear_details_view(self) -> None:
+        """Clear detail view."""
         self.prim_name_label.clear()
         self.prim_path_text.clear()
         self.prim_type_label.clear()
         self.mat_status_label.clear()
         self.prim_bound_path.clear()
 
-    def populate_material_tree(self):
-        """
-        Collects all materials found on a USD stage,
-        split their path into a list to be used to populate QTreeWidget
-        Calls a build_tree_recursive for each material
-        """
+    def populate_material_tree(self) -> None:
+        """Populate material tree from stage materials."""
         self.tree_mat_list.clear()
 
         root = self.tree_mat_list.invisibleRootItem()
-        materials = _usd.find_all_materials(self.stage)
+        materials = usd.find_all_materials(self.stage)
 
         for material in materials:
             path_str = str(material.GetPath())
             parts = path_str.strip('/').split('/')
             self.build_tree_recursive(root, parts, material)
 
-    def build_tree_recursive(self, parent: Usd.Prim, parts: list, material_prim: Usd.Prim):
+    def build_tree_recursive(self, parent: QtWidgets.QListWidget, parts: list, material_prim: Usd.Prim) -> None:
         """
-        Recursively builds a tree structure in the QTreeWidget based on material paths
+        Build tree structure from material paths.
+
         Args:
-            parent: root of a tree view
-            parts: list of parts to build the hierarchy (path attr split by ("/")
-            material_prim: Usd.Prim
+            parent: Parent tree item.
+            parts: Path parts.
+            material_prim: Material prim.
         """
         if not parts:
             return
@@ -281,24 +289,15 @@ class MaterialBindingChecker(QtWidgets.QDialog):
 
         self.build_tree_recursive(found, parts[1:], material_prim)
 
-    def on_expand_all_check(self):
-        """
-        Expands the material view tree when checked, collapses it when unchecked.
-        """
+    def on_expand_all_check(self) -> None:
+        """Toggle expand state of material tree."""
         if self.expand_all_check.isChecked():
             self.tree_mat_list.expandAll()
         else:
             self.tree_mat_list.collapseAll()
 
-    def on_assign_material_executed(self):
-        """
-        Executes all logic to bind the selected material to one or more primitives.
-        Validates the selected material from the material library.
-        Creates an Assign Material node if one does not already exist.
-        Binds the material to selected primitives or all filtered primitives (if bulk assign is checked)
-        Updates the detail view data.
-
-        """
+    def on_assign_material_executed(self) -> None:
+        """Assign selected material to primitives."""
         # Check if the selected material is valid and get its metadata
         selected_mat_item = self.get_selection(self.tree_mat_list)
 
@@ -306,18 +305,18 @@ class MaterialBindingChecker(QtWidgets.QDialog):
             mat_metadata = selected_mat_item[0].data(0, QtCore.Qt.UserRole)
             material_prim = mat_metadata.get('usd_prim')
             if material_prim is None:
-                _status_messages.handle_error("The selected material is invalid."
-                                              "Please select a valid material from the library.")
+                status_messages.handle_error("The selected material is invalid."
+                                             "Please select a valid material from the library.")
                 return
         else:
-            _status_messages.handle_error("No material selected. "
-                                          "Please select a material from the material library.")
+            status_messages.handle_error("No material selected. "
+                                         "Please select a material from the material library.")
         # Check if an Assign Material node already exists or needs to be created
         if self.assign_mat_node is None:
             self.create_assign_material_node()
             if self.assign_mat_node is None:
-                _status_messages.handle_error("Failed to create the Assign Material node. "
-                                              "Ensure you are in a writable context.")
+                status_messages.handle_error("Failed to create the Assign Material node. "
+                                             "Ensure you are in a writable context.")
         #  If Bulk Assign is checked, selected_items is set to all filtered primitives
         if self.bulk_assign_check.isChecked():
             selected_items = [
@@ -335,12 +334,12 @@ class MaterialBindingChecker(QtWidgets.QDialog):
 
                 usd_prim = metadata.get('usd_prim')
                 if usd_prim is None:
-                    _status_messages.handle_error("The selected geometry is invalid."
-                                                  "Please select a valid geometry primitive.")
+                    status_messages.handle_error("The selected geometry is invalid."
+                                                 "Please select a valid geometry primitive.")
 
                 # Get the number of materials already existing in material assign and populate assign material parameters
-                new_mat_index = _houdini.compute_mat_assign_index(self.assign_mat_node)
-                _houdini.populate_mat_assign_parms(self.assign_mat_node, new_mat_index, usd_prim, material_prim)
+                new_mat_index = houdini.compute_mat_assign_index(self.assign_mat_node)
+                houdini.populate_mat_assign_parms(self.assign_mat_node, new_mat_index, usd_prim, material_prim)
 
             # Set selection on the first visible item in a list if the bulk assign is checked
             if self.bulk_assign_check.isChecked():
@@ -352,27 +351,21 @@ class MaterialBindingChecker(QtWidgets.QDialog):
 
                         break
             if self.get_selection(self.search_output):
-                self.mat_status_label.setText(str(_usd.solve_material_status(
+                self.mat_status_label.setText(str(usd.solve_material_status(
                     material_prim))) if material_prim else self.mat_status_label.setText("None")
                 self.prim_bound_path.setText(str(material_prim.GetPath()))
-            
+
         else:
-            _status_messages.handle_error("No geometry selected. Please select a primitive from the list.")
+            status_messages.handle_error("No geometry selected. Please select a primitive from the list.")
             return
         self.search_output.clearSelection()
 
-    def create_assign_material_node(self):
-        """
-        Creates the Assign Material node.
-
-        If one of the outputs of the selected node or current selected node
-        is an Assigned Material node, it will be used instead of creating a new one
-        """
-
+    def create_assign_material_node(self) -> None:
+        """Create or reuse assign material node."""
         selected_node = hou.node(self.stage_path)
 
         if not selected_node:
-            _status_messages.handle_error("No node selected.")
+            status_messages.handle_error("No node selected.")
 
         if selected_node.type().name() == "assignmaterial":
             self.assign_mat_node = selected_node
@@ -384,15 +377,12 @@ class MaterialBindingChecker(QtWidgets.QDialog):
                 break
 
         if not self.assign_mat_node:
-            self.assign_mat_node = _houdini.create_and_insert_hou_node(selected_node,
-                                                                       "assignmaterial",
-                                                                       "fix_missing_binding")
+            self.assign_mat_node = houdini.create_and_insert_hou_node(selected_node,
+                                                                      "assignmaterial",
+                                                                      "fix_missing_binding")
 
-    def run_search(self):
-        """
-        Runs a search using a Trie and updates the search_output QListWidget
-        with the matching results.
-        """
+    def run_search(self) -> None:
+        """Filter prim list using search input."""
         if not self.searching and self.search_line.text():
             self.clear_details_view()
             self.search_output.clearSelection()
@@ -420,7 +410,13 @@ class MaterialBindingChecker(QtWidgets.QDialog):
             else:
                 item.setHidden(True)
 
-    def reset_search_state(self, text):
+    def reset_search_state(self, text) -> None:
+        """
+        Reset search state when input is cleared.
+
+        Args:
+            text: Search text.
+        """
         if not text:
             self.searching = False
             self.search_output.clearSelection()
@@ -429,7 +425,8 @@ class MaterialBindingChecker(QtWidgets.QDialog):
 dialog = None
 
 
-def show_houdini():
+def show_houdini() -> QtWidgets.QDialog:
+    """Launch the material binding checker UI."""
     import hou
     global dialog
     dialog = MaterialBindingChecker(parent=hou.qt.mainWindow())
